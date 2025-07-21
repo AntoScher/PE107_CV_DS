@@ -1,8 +1,9 @@
 import streamlit as st
-from openai import OpenAI
+from deepseek_api import DeepSeekAPI
 from parse_hh import get_html, extract_vacancy_data, extract_resume_data
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+# Initialize DeepSeek client
+client = DeepSeekAPI(api_key=st.secrets["DEEPSEEK_API_KEY"])
 
 SYSTEM_PROMPT = """
 Проскорь кандидата, насколько он подходит для данной вакансии.
@@ -12,12 +13,12 @@ SYSTEM_PROMPT = """
 Потом представь результат в виде оценки от 1 до 10.
 """.strip()
 
-def request_gpt(system_prompt, user_prompt):
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
+def request_deepseek(system_prompt, user_prompt):
+    response = client.chat(
+        model="deepseek-chat",
         messages=[
-            {"role": "system", "content": system_prompt},  
-            {"role": "user", "content": user_prompt},     
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
         ],
         max_tokens=1000,
         temperature=0,
@@ -40,7 +41,7 @@ if st.button("Проанализировать соответствие"):
             resume_text = extract_resume_data(resume_html)
 
             prompt = f"# ВАКАНСИЯ\n{job_text}\n\n# РЕЗЮМЕ\n{resume_text}"
-            response = request_gpt(SYSTEM_PROMPT, prompt)
+            response = request_deepseek(SYSTEM_PROMPT, prompt)
 
             st.subheader("📊 Результат анализа:")
             st.markdown(response)
