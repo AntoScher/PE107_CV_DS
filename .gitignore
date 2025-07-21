@@ -1,6 +1,78 @@
-.venv/
+# Python
 __pycache__/
-.project1/secrets.toml
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables
 .env
+.env.*
+!.env.example
+
+# Secrets
 secrets.toml
 *.toml
+.project1/secrets.toml
+
+# Allow .streamlit/secrets.toml for local development
+!.streamlit/
+!.streamlit/secrets.toml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Project specific
+output/
+data/
+*.csv
+*.xlsx
+*.xls
+.streamlit/secrets.toml
