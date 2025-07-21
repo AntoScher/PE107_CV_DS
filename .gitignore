@@ -4,4 +4,3 @@ __pycache__/
 .env
 secrets.toml
 *.toml
-secrets.toml
