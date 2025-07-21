@@ -2,3 +2,6 @@
 __pycache__/
 .project1/secrets.toml
 .env
+secrets.toml
+*.toml
+secrets.toml
