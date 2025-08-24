@@ -54,27 +54,27 @@ class Config:
         # Load environment variables
         self._load_env_vars()
     
-    def _load_env_vars(self):
+    def _load_env_vars(self) -> None:
         """Load configuration from environment variables."""
         # API settings
         if os.getenv("DEEPSEEK_BASE_URL"):
             self.api.base_url = os.getenv("DEEPSEEK_BASE_URL")
         if os.getenv("DEEPSEEK_TIMEOUT"):
-            self.api.timeout = int(os.getenv("DEEPSEEK_TIMEOUT"))
+            self.api.timeout = int(os.getenv("DEEPSEEK_TIMEOUT", "30"))
         if os.getenv("DEEPSEEK_MAX_RETRIES"):
-            self.api.max_retries = int(os.getenv("DEEPSEEK_MAX_RETRIES"))
+            self.api.max_retries = int(os.getenv("DEEPSEEK_MAX_RETRIES", "3"))
         
         # Parser settings
         if os.getenv("PARSER_TIMEOUT"):
-            self.parser.timeout = int(os.getenv("PARSER_TIMEOUT"))
+            self.parser.timeout = int(os.getenv("PARSER_TIMEOUT", "10"))
         if os.getenv("PARSER_MAX_RETRIES"):
-            self.parser.max_retries = int(os.getenv("PARSER_MAX_RETRIES"))
+            self.parser.max_retries = int(os.getenv("PARSER_MAX_RETRIES", "3"))
         
         # App settings
         if os.getenv("DEBUG"):
-            self.app.debug = os.getenv("DEBUG").lower() in ("true", "1", "yes")
+            self.app.debug = os.getenv("DEBUG", "").lower() in ("true", "1", "yes")
         if os.getenv("LOG_LEVEL"):
-            self.app.log_level = os.getenv("LOG_LEVEL").upper()
+            self.app.log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     
     def get_api_key(self) -> Optional[str]:
         """Get API key from environment or secrets."""

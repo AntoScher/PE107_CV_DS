@@ -47,7 +47,7 @@ def test_direct_api(api_key):
         print("\nResponse content:")
         try:
             print(json.dumps(response.json(), indent=2, ensure_ascii=False))
-        except:
+        except Exception:
             print(response.text)
             
         return response.status_code == 200

@@ -21,7 +21,9 @@ class RequestError(ParseError):
 @log_requests(logger)
 @log_performance(logger)
 @log_errors(logger)
-def get_html(url: str, max_retries: Optional[int] = None, timeout: Optional[int] = None) -> requests.Response:
+def get_html(
+    url: str, max_retries: Optional[int] = None, timeout: Optional[int] = None
+) -> requests.Response:
     """
     Fetch HTML content from a URL with retry logic and random user agents.
     

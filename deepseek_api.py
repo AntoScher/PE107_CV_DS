@@ -23,12 +23,14 @@ class AuthenticationError(DeepSeekAPIError):
 class DeepSeekAPI:
     """A client for the DeepSeek API with retry logic and error handling."""
     
-    def __init__(self, 
-                api_key: str, 
-                base_url: Optional[str] = None,
-                timeout: Optional[int] = None,
-                max_retries: Optional[int] = None,
-                retry_delay: Optional[int] = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: Optional[str] = None,
+        timeout: Optional[int] = None,
+        max_retries: Optional[int] = None,
+        retry_delay: Optional[int] = None
+    ):
         """
         Initialize the DeepSeek API client.
         
@@ -95,10 +97,12 @@ class DeepSeekAPI:
     
     @log_performance(logger)
     @log_errors(logger)
-    def _make_request(self, 
-                     method: str, 
-                     endpoint: str, 
-                     **kwargs) -> Dict[str, Any]:
+    def _make_request(
+        self,
+        method: str,
+        endpoint: str,
+        **kwargs
+    ) -> Dict[str, Any]:
         """Make an HTTP request with retry logic."""
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         last_exception = None
@@ -135,15 +139,17 @@ class DeepSeekAPI:
         
         logger.error(f"All {self.max_retries + 1} request attempts failed")
         raise last_exception or DeepSeekAPIError("Request failed after maximum retries")
-    
+
     @log_performance(logger)
     @log_errors(logger)
-    def chat(self, 
-             model: str, 
-             messages: List[Dict[str, str]], 
-             temperature: Optional[float] = None,
-             max_tokens: Optional[int] = None,
-             **kwargs) -> Dict[str, Any]:
+    def chat(
+        self,
+        model: str,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> Dict[str, Any]:
         """
         Send a chat completion request to the DeepSeek API.
         

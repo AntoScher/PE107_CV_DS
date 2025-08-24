@@ -1,5 +1,3 @@
-import os
-import re
 import requests
 import streamlit as st
 from deepseek_api import DeepSeekAPI, DeepSeekAPIError
@@ -24,8 +22,10 @@ def validate_url(url: str, domain: str = 'hh.ru') -> bool:
         return False
     try:
         result = urlparse(url)
-        is_valid = all([result.scheme in ['http', 'https'], 
-                       result.netloc.endswith(domain)])
+        is_valid = all([
+            result.scheme in ['http', 'https'],
+            result.netloc.endswith(domain)
+        ])
         if not is_valid:
             logger.warning(f"Invalid URL format: {url}")
         return is_valid
@@ -124,10 +124,14 @@ def main():
         initialize_api()
     
     # Input fields
-    job_url = st.text_input('🔗 Ссылка на вакансию (hh.ru)', 
-                          placeholder='https://hh.ru/vacancy/...')
-    cv_url = st.text_input('📄 Ссылка на резюме (hh.ru)',
-                         placeholder='https://hh.ru/resume/...')
+    job_url = st.text_input(
+        '🔗 Ссылка на вакансию (hh.ru)',
+        placeholder='https://hh.ru/vacancy/...'
+    )
+    cv_url = st.text_input(
+        '📄 Ссылка на резюме (hh.ru)',
+        placeholder='https://hh.ru/resume/...'
+    )
     
     # Validate URLs
     if not validate_url(job_url) and job_url:
@@ -135,9 +139,11 @@ def main():
     if not validate_url(cv_url) and cv_url:
         st.warning("Пожалуйста, укажите корректную ссылку на резюме с hh.ru")
     
-    if st.button("🔍 Проанализировать соответствие", 
-                disabled=not (job_url and cv_url),
-                help="Укажите обе ссылки для анализа"):
+    if st.button(
+        "🔍 Проанализировать соответствие",
+        disabled=not (job_url and cv_url),
+        help="Укажите обе ссылки для анализа"
+    ):
         
         logger.info(f"Starting analysis for job: {job_url}, resume: {cv_url}")
         

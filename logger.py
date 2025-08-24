@@ -12,7 +12,7 @@ class ColoredFormatter(logging.Formatter):
     
     COLORS = {
         'DEBUG': '\033[36m',    # Cyan
-        'INFO': '\033[32m',     # Green
+        'INFO': '\033[32m',  # Green
         'WARNING': '\033[33m',  # Yellow
         'ERROR': '\033[31m',    # Red
         'CRITICAL': '\033[35m', # Magenta
@@ -54,10 +54,6 @@ def setup_logger(
     # Create formatters
     detailed_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s'
-    )
-    
-    simple_formatter = logging.Formatter(
-        '%(asctime)s - %(levelname)s - %(message)s'
     )
     
     colored_formatter = ColoredFormatter(
