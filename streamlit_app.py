@@ -1,26 +1,18 @@
 import os
 import re
+import requests
 import streamlit as st
 from deepseek_api import DeepSeekAPI, DeepSeekAPIError
 from parse_hh import get_html, extract_vacancy_data, extract_resume_data, ParseError
 from urllib.parse import urlparse
+from config import config, SYSTEM_PROMPT_TEMPLATE
+from logger import get_logger, log_performance, log_errors
 
-# Constants
-SYSTEM_PROMPT = """
-Проскорь кандидата, насколько он подходит для данной вакансии.
+# Initialize logger
+logger = get_logger("streamlit_app")
 
-Сначала напиши короткий анализ, который будет пояснять оценку.
-Отдельно оцени качество заполнения резюме (понятно ли, с какими задачами сталкивался кандидат и каким образом их решал?).
-Эта оценка должна учитываться при выставлении финальной оценки - нам важно нанимать таких кандидатов, которые могут рассказать про свою работу.
-Потом представь результат в виде оценки от 1 до 10.
-""".strip()
-
-# Configuration
-CONFIG = {
-    'required_fields': ['job_url', 'cv_url'],
-    'max_retries': 3,
-    'request_timeout': 30
-}
+# Use configuration from config.py
+SYSTEM_PROMPT = SYSTEM_PROMPT_TEMPLATE
 
 # Initialize session state
 if 'api_initialized' not in st.session_state:
@@ -32,28 +24,45 @@ def validate_url(url: str, domain: str = 'hh.ru') -> bool:
         return False
     try:
         result = urlparse(url)
-        return all([result.scheme in ['http', 'https'], 
-                   result.netloc.endswith(domain)])
-    except ValueError:
+        is_valid = all([result.scheme in ['http', 'https'], 
+                       result.netloc.endswith(domain)])
+        if not is_valid:
+            logger.warning(f"Invalid URL format: {url}")
+        return is_valid
+    except ValueError as e:
+        logger.error(f"URL parsing error: {str(e)} for URL: {url}")
         return False
 
+@log_errors(logger)
 def initialize_api():
     """Initialize the DeepSeek API client."""
     try:
-        api_key = st.secrets.get("DEEPSEEK_API_KEY")
+        # Try to get API key from config first
+        api_key = config.get_api_key()
         if not api_key:
-            st.error("⚠️ API ключ не найден. Пожалуйста, укажите ваш DeepSeek API ключ в файле .streamlit/secrets.toml")
+            st.error("⚠️ API ключ не найден. Пожалуйста, укажите ваш DeepSeek API ключ в файле .streamlit/secrets.toml или в переменной окружения DEEPSEEK_API_KEY")
             st.code("""[DEEPSEEK_API_KEY] = "ваш_ключ_здесь""", language='toml')
             st.stop()
         
-        client = DeepSeekAPI(api_key=api_key)
+        logger.info("Initializing DeepSeek API client")
+        client = DeepSeekAPI(
+            api_key=api_key,
+            base_url=config.api.base_url,
+            timeout=config.api.timeout,
+            max_retries=config.api.max_retries,
+            retry_delay=config.api.retry_delay
+        )
         st.session_state.client = client
         st.session_state.api_initialized = True
+        logger.info("DeepSeek API client initialized successfully")
         return client
     except Exception as e:
+        logger.error(f"Failed to initialize API client: {str(e)}")
         st.error(f"Ошибка при инициализации API: {str(e)}")
         st.stop()
 
+@log_performance(logger)
+@log_errors(logger)
 def request_deepseek(system_prompt: str, user_prompt: str) -> str:
     """Send a request to the DeepSeek API with error handling and retries."""
     if not st.session_state.api_initialized:
@@ -62,41 +71,51 @@ def request_deepseek(system_prompt: str, user_prompt: str) -> str:
         client = st.session_state.client
     
     try:
+        logger.info("Sending request to DeepSeek API")
         response = client.chat(
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            max_tokens=1000,
-            temperature=0,
+            max_tokens=config.api.max_tokens,
+            temperature=config.api.temperature,
         )
         
-        # Debug: Print the full response structure
-        print("API Response:", response)  # This will be visible in the terminal
+        logger.debug(f"API Response received: {type(response)}")
         
         # Handle different response formats
         if isinstance(response, dict):
             if 'choices' in response and len(response['choices']) > 0:
-                return response['choices'][0].get('message', {}).get('content', 'No content')
+                content = response['choices'][0].get('message', {}).get('content', 'No content')
+                logger.info("Successfully extracted content from API response")
+                return content
             elif 'text' in response:
+                logger.info("Using 'text' field from API response")
                 return response['text']
             else:
+                logger.warning("Unexpected response format, using string representation")
                 return str(response)  # Fallback to string representation
         
         # If response is not a dictionary, try to get its string representation
+        logger.warning("Response is not a dictionary, using string representation")
         return str(response)
         
     except DeepSeekAPIError as e:
+        logger.error(f"DeepSeek API error: {str(e)}")
         st.error(f"Ошибка API DeepSeek: {str(e)}")
         st.error("Пожалуйста, проверьте ваш API ключ и повторите попытку.")
     except Exception as e:
+        logger.error(f"Unexpected error in API request: {str(e)}")
         st.error(f"Произошла непредвиденная ошибка: {str(e)}")
         st.exception(e)  # This will show the full traceback in the terminal
     return "Не удалось получить ответ от API. Пожалуйста, проверьте логи для подробностей."
 
+@log_performance(logger)
 def main():
     """Main application function."""
+    logger.info("Starting Streamlit application")
+    
     st.title('📊 Анализ соответствия резюме и вакансии')
     st.markdown("---")
     
@@ -120,13 +139,17 @@ def main():
                 disabled=not (job_url and cv_url),
                 help="Укажите обе ссылки для анализа"):
         
+        logger.info(f"Starting analysis for job: {job_url}, resume: {cv_url}")
+        
         with st.spinner("⏳ Анализируем данные..."):
             try:
                 # Get and parse HTML
+                logger.info("Fetching HTML content")
                 job_html = get_html(job_url).text
                 resume_html = get_html(cv_url).text
                 
                 # Extract data
+                logger.info("Extracting data from HTML")
                 job_text = extract_vacancy_data(job_html)
                 resume_text = extract_resume_data(resume_html)
                 
@@ -139,18 +162,23 @@ def main():
                     st.markdown("### Данные резюме")
                     st.text(resume_text[:1000] + (resume_text[1000:] and '...'))
                 
+                logger.info("Sending analysis request to AI")
                 response = request_deepseek(SYSTEM_PROMPT, prompt)
                 
                 if response:
                     st.markdown("---")
                     st.subheader("📊 Результат анализа:")
                     st.markdown(response)
+                    logger.info("Analysis completed successfully")
                 
             except ParseError as e:
+                logger.error(f"Parse error: {str(e)}")
                 st.error(f"Ошибка при разборе страницы: {str(e)}")
             except requests.exceptions.RequestException as e:
+                logger.error(f"Request error: {str(e)}")
                 st.error(f"Ошибка при загрузке страницы: {str(e)}")
             except Exception as e:
+                logger.error(f"Unexpected error: {str(e)}")
                 st.error(f"Произошла непредвиденная ошибка: {str(e)}")
                 st.exception(e)
 

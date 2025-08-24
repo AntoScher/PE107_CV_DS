@@ -2,6 +2,11 @@ import json
 import time
 import requests
 from typing import Dict, List, Optional, Union, Any
+from config import config
+from logger import get_logger, log_performance, log_errors
+
+# Initialize logger
+logger = get_logger("deepseek_api")
 
 class DeepSeekAPIError(Exception):
     """Base exception for DeepSeek API errors."""
@@ -20,34 +25,38 @@ class DeepSeekAPI:
     
     def __init__(self, 
                 api_key: str, 
-                base_url: str = "https://api.deepseek.com/v1",
-                timeout: int = 30,
-                max_retries: int = 3,
-                retry_delay: int = 5):
+                base_url: Optional[str] = None,
+                timeout: Optional[int] = None,
+                max_retries: Optional[int] = None,
+                retry_delay: Optional[int] = None):
         """
         Initialize the DeepSeek API client.
         
         Args:
             api_key: Your DeepSeek API key
-            base_url: Base URL for the DeepSeek API
-            timeout: Request timeout in seconds
-            max_retries: Maximum number of retry attempts for failed requests
-            retry_delay: Delay between retry attempts in seconds
+            base_url: Base URL for the DeepSeek API (uses config default if None)
+            timeout: Request timeout in seconds (uses config default if None)
+            max_retries: Maximum number of retry attempts for failed requests (uses config default if None)
+            retry_delay: Delay between retry attempts in seconds (uses config default if None)
         """
         if not api_key:
             raise ValueError("API key is required")
+        
+        logger.info("Initializing DeepSeek API client")
             
         self.api_key = api_key
-        self.base_url = base_url.rstrip('/')
-        self.timeout = timeout
-        self.max_retries = max_retries
-        self.retry_delay = retry_delay
+        self.base_url = (base_url or config.api.base_url).rstrip('/')
+        self.timeout = timeout or config.api.timeout
+        self.max_retries = max_retries or config.api.max_retries
+        self.retry_delay = retry_delay or config.api.retry_delay
         
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+        
+        logger.info(f"DeepSeek API client initialized with base_url: {self.base_url}")
     
     def _handle_error_response(self, response: requests.Response) -> None:
         """Handle API error responses and raise appropriate exceptions."""
@@ -59,16 +68,33 @@ class DeepSeekAPI:
             error_msg = response.text or 'Unknown error'
             error_code = 'unknown'
         
+        logger.error(f"API error response: {response.status_code} - {error_msg} (code: {error_code})")
+        
+        logger.debug(f"Processing status code: {response.status_code}")
+        
         if response.status_code == 401:
             raise AuthenticationError(f"Authentication failed: {error_msg}")
         elif response.status_code == 429:
             retry_after = response.headers.get('Retry-After', self.retry_delay)
             raise RateLimitError(f"Rate limit exceeded. Try again in {retry_after} seconds")
         elif 400 <= response.status_code < 500:
+            logger.debug(f"Raising DeepSeekAPIError for status code {response.status_code}")
             raise DeepSeekAPIError(f"API request failed ({response.status_code}): {error_msg}")
+        elif response.status_code == 500:
+            # For 500 errors, raise HTTPError
+            logger.debug(f"Raising HTTPError for status code {response.status_code}")
+            response.raise_for_status()
+        elif response.status_code >= 500:
+            # For 5xx errors, raise HTTPError
+            logger.debug(f"Raising HTTPError for status code {response.status_code}")
+            response.raise_for_status()
         else:
+            # For other errors, raise HTTPError
+            logger.debug(f"Raising HTTPError for status code {response.status_code}")
             response.raise_for_status()
     
+    @log_performance(logger)
+    @log_errors(logger)
     def _make_request(self, 
                      method: str, 
                      endpoint: str, 
@@ -77,8 +103,11 @@ class DeepSeekAPI:
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         last_exception = None
         
+        logger.debug(f"Making {method} request to {endpoint}")
+        
         for attempt in range(self.max_retries + 1):
             try:
+                logger.debug(f"Request attempt {attempt + 1}/{self.max_retries + 1}")
                 response = requests.request(
                     method=method,
                     url=url,
@@ -88,6 +117,7 @@ class DeepSeekAPI:
                 )
                 
                 if response.status_code == 200:
+                    logger.debug("Request successful")
                     return response.json()
                 
                 self._handle_error_response(response)
@@ -95,18 +125,24 @@ class DeepSeekAPI:
             except (requests.exceptions.RequestException, 
                   DeepSeekAPIError) as e:
                 last_exception = e
+                logger.warning(f"Request attempt {attempt + 1} failed: {str(e)}")
                 if attempt < self.max_retries and not isinstance(e, AuthenticationError):
-                    time.sleep(self.retry_delay * (attempt + 1))
+                    sleep_time = self.retry_delay * (attempt + 1)
+                    logger.debug(f"Waiting {sleep_time}s before retry")
+                    time.sleep(sleep_time)
                     continue
                 raise
         
+        logger.error(f"All {self.max_retries + 1} request attempts failed")
         raise last_exception or DeepSeekAPIError("Request failed after maximum retries")
     
+    @log_performance(logger)
+    @log_errors(logger)
     def chat(self, 
              model: str, 
              messages: List[Dict[str, str]], 
-             temperature: float = 0.7,
-             max_tokens: int = 1000,
+             temperature: Optional[float] = None,
+             max_tokens: Optional[int] = None,
              **kwargs) -> Dict[str, Any]:
         """
         Send a chat completion request to the DeepSeek API.
@@ -114,8 +150,8 @@ class DeepSeekAPI:
         Args:
             model: The model to use (e.g., "deepseek-chat")
             messages: List of message dictionaries with 'role' and 'content' keys
-            temperature: Sampling temperature (0-2). Lower values make output more deterministic.
-            max_tokens: Maximum number of tokens to generate
+            temperature: Sampling temperature (0-2). Lower values make output more deterministic. (uses config default if None)
+            max_tokens: Maximum number of tokens to generate (uses config default if None)
             **kwargs: Additional parameters to pass to the API
             
         Returns:
@@ -130,6 +166,12 @@ class DeepSeekAPI:
             
         if not messages or not isinstance(messages, list):
             raise ValueError("Messages must be a non-empty list")
+        
+        # Use config defaults if not provided
+        temperature = temperature if temperature is not None else config.api.temperature
+        max_tokens = max_tokens if max_tokens is not None else config.api.max_tokens
+        
+        logger.info(f"Sending chat request to model: {model}, temperature: {temperature}, max_tokens: {max_tokens}")
             
         payload = {
             "model": model,
@@ -139,12 +181,16 @@ class DeepSeekAPI:
             **kwargs
         }
         
+        logger.debug(f"Chat payload prepared with {len(messages)} messages")
+        
         return self._make_request(
             method="POST",
             endpoint="/chat/completions",
             json=payload
         )
     
+    @log_performance(logger)
+    @log_errors(logger)
     def get_models(self) -> Dict[str, Any]:
         """
         List available models.
@@ -152,4 +198,5 @@ class DeepSeekAPI:
         Returns:
             Dictionary containing available models
         """
+        logger.info("Fetching available models")
         return self._make_request("GET", "/models")
